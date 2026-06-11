@@ -1,0 +1,62 @@
+name: Process mobile Bio Log issue
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to process"
+        required: true
+        type: string
+      entry_date:
+        description: "Entry date YYYY-MM-DD. Leave blank to infer from issue title/body."
+        required: false
+        type: string
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  process-mobile-issue:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request == null &&
+       contains(github.event.comment.body, '/process-bio-log'))
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Configure git author
+        run: |
+          git config user.name "bio-log-bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Resolve inputs
+        id: vars
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "issue_number=${{ inputs.issue_number }}" >> "$GITHUB_OUTPUT"
+            echo "entry_date=${{ inputs.entry_date }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "issue_number=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
+            echo "entry_date=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Process issue attachment into Bio Log archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BIO_LOG_REPO: ${{ github.repository }}
+        run: |
+          if [ -n "${{ steps.vars.outputs.entry_date }}" ]; then
+            python3 process-mobile-issue.py "${{ steps.vars.outputs.issue_number }}" --date "${{ steps.vars.outputs.entry_date }}" --create-log --commit --push --comment --close
+          else
+            python3 process-mobile-issue.py "${{ steps.vars.outputs.issue_number }}" --create-log --commit --push --comment --close
+          fi
