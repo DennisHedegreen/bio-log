@@ -12,6 +12,7 @@ This repository is the archive and workflow layer for the project. It stores dat
 - `logs/` — dated observation notes
 - `images/` — photos grouped by date
 - `bio-log.py` — interactive daily logging script
+- `process-mobile-issue.py` — processor for GitHub mobile issue photo intake
 - GitHub Issues — temporary mobile photo intake during the low-friction mobile workflow
 
 ## Daily log format
@@ -71,6 +72,30 @@ A processed mobile issue should eventually become normal repository files:
 - `logs/YYYY-MM-DD.md`
 
 After processing, the issue can be closed or marked as processed.
+
+## Processing a mobile issue locally
+
+The mobile issue processor reads a GitHub issue, finds uploaded image attachments, downloads them, saves them into the dated `images/` archive, and updates or creates the matching daily log.
+
+Basic dry run:
+
+```bash
+python3 process-mobile-issue.py 1 --dry-run
+```
+
+Process issue `#1` and update the existing log:
+
+```bash
+python3 process-mobile-issue.py 1 --date 2026-06-11
+```
+
+Process, commit, push, comment on the issue, and close it:
+
+```bash
+GH_TOKEN=your_token_here python3 process-mobile-issue.py 1 --date 2026-06-11 --commit --push --comment --close
+```
+
+A token is only required for private attachments, commenting, closing issues, or authenticated API access.
 
 ## Restart baseline
 
