@@ -1,0 +1,3 @@
+__BINARY_IMAGE_UPLOAD_UNAVAILABLE_IN_THIS_CONNECTOR__
+
+The real image for this entry was uploaded in ChatGPT as file 1000011146.jpg, but the current GitHub create_file action exposed here only supports UTF-8 text content, not raw binary image bytes. This placeholder should be replaced by the actual JPEG through the local repo workflow or a binary-capable GitHub upload path.
