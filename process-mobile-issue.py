@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -158,20 +159,86 @@ def extension_from_link(link: ImageLink, content_type: str | None = None) -> str
     return from_type or '.jpg'
 
 
-def download_image(link: ImageLink, token: str | None = None) -> tuple[bytes, str | None]:
-    headers = {'User-Agent': 'bio-log-mobile-issue-processor'}
-    if token:
+def browser_download_headers(url: str, token: str | None = None) -> dict[str, str]:
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 BioLogProcessor/0.2',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Referer': 'https://github.com/',
+    }
+    # Do not attach the GitHub token to public github.com/user-attachments URLs.
+    # The token is useful for private-user-images.githubusercontent.com URLs.
+    if token and 'private-user-images.githubusercontent.com' in url:
         headers['Authorization'] = f'Bearer {token}'
-    request = Request(link.url, headers=headers)
+    return headers
+
+
+def download_candidates(url: str) -> list[str]:
+    candidates = [url]
+    if 'github.com/user-attachments/assets/' in url and '?' not in url:
+        candidates.append(f'{url}?download=1')
+    return candidates
+
+
+def download_with_urlopen(url: str, token: str | None = None) -> tuple[bytes, str | None]:
+    request = Request(url, headers=browser_download_headers(url, token))
+    with urlopen(request, timeout=60) as response:
+        data = response.read()
+        content_type = response.headers.get('Content-Type')
+        return data, content_type
+
+
+def download_with_curl(url: str, token: str | None = None) -> tuple[bytes, str | None]:
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        output_path = Path(tmp.name)
+
+    headers = browser_download_headers(url, token)
+    cmd = [
+        'curl',
+        '-L',
+        '--fail',
+        '--silent',
+        '--show-error',
+        '--retry',
+        '3',
+        '--output',
+        str(output_path),
+    ]
+    for key, value in headers.items():
+        cmd.extend(['-H', f'{key}: {value}'])
+    cmd.append(url)
+
+    result = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True)
     try:
-        with urlopen(request, timeout=60) as response:
-            data = response.read()
-            content_type = response.headers.get('Content-Type')
-            return data, content_type
-    except HTTPError as error:
-        raise RuntimeError(f'Could not download image {link.url}: HTTP {error.code}') from error
-    except URLError as error:
-        raise RuntimeError(f'Could not download image {link.url}: {error}') from error
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or '').strip()
+            raise RuntimeError(f'curl failed for {url}: {detail or f"exit code {result.returncode}"}')
+        data = output_path.read_bytes()
+        if not data:
+            raise RuntimeError(f'curl downloaded empty file for {url}')
+        return data, None
+    finally:
+        output_path.unlink(missing_ok=True)
+
+
+def download_image(link: ImageLink, token: str | None = None) -> tuple[bytes, str | None]:
+    errors: list[str] = []
+    for url in download_candidates(link.url):
+        try:
+            return download_with_urlopen(url, token)
+        except HTTPError as error:
+            errors.append(f'urlopen {url}: HTTP {error.code}')
+        except URLError as error:
+            errors.append(f'urlopen {url}: {error}')
+        except Exception as error:
+            errors.append(f'urlopen {url}: {error}')
+
+        try:
+            return download_with_curl(url, token)
+        except Exception as error:
+            errors.append(str(error))
+
+    joined = '; '.join(errors)
+    raise RuntimeError(f'Could not download image {link.url}. Attempts: {joined}')
 
 
 def next_image_path(entry_date: str, ext: str) -> Path:
