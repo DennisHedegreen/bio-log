@@ -14,6 +14,7 @@ This repository is the archive and workflow layer for the project. It stores dat
 - `bio-log.py` — interactive daily logging script
 - `process-mobile-issue.py` — processor for GitHub mobile issue photo intake
 - GitHub Issues — temporary mobile photo intake during the low-friction mobile workflow
+- GitHub Actions — optional processor that can turn a mobile issue into normal repository files
 
 ## Daily log format
 
@@ -72,6 +73,36 @@ A processed mobile issue should eventually become normal repository files:
 - `logs/YYYY-MM-DD.md`
 
 After processing, the issue can be closed or marked as processed.
+
+## Processing a mobile issue through GitHub Actions
+
+The repository includes a workflow at:
+
+- `.github/workflows/process-mobile-bio-log.yml`
+
+The workflow can be triggered in two ways.
+
+### Manual trigger
+
+Run the workflow manually from GitHub Actions and provide:
+
+- `issue_number`
+- optional `entry_date`
+
+Example values:
+
+- `issue_number`: `1`
+- `entry_date`: `2026-06-11`
+
+### Comment trigger
+
+Comment on a mobile Bio Log issue with:
+
+```text
+/process-bio-log
+```
+
+The workflow will process that issue, save uploaded images into the normal `images/` archive, update or create the matching log, comment with processed paths, and close the issue.
 
 ## Processing a mobile issue locally
 
